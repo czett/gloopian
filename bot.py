@@ -39,6 +39,10 @@ async def tts_play(ctx, text: str, voice="de-DE-ConradNeural"):
     if ctx.voice_client is None:
         await ctx.author.voice.channel.connect()
 
+    if not ctx.voice_client:
+        await ctx.send("Fehler beim Verbinden zum Voice-Channel.")
+        return
+
     # TTS erzeugen (männliche Stimme)
     with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as tmpfile:
         filepath = tmpfile.name
@@ -94,20 +98,6 @@ async def on_message(message):
 
   await bot.process_commands(message)
 
-async def ensure_voice(ctx):
-    if ctx.author.voice is None:
-        await ctx.send("Du musst in einem Sprachkanal sein!")
-        return None
-
-    channel = ctx.author.voice.channel
-
-    if ctx.voice_client is None:
-        return await channel.connect()
-    elif ctx.voice_client.channel != channel:
-        await ctx.voice_client.move_to(channel)
-        return ctx.voice_client
-    else:
-        return ctx.voice_client
 
 @bot.command()
 @commands.has_permissions(manage_nicknames=True)
@@ -131,54 +121,125 @@ async def nick(ctx, member: discord.Member, *, new_nickname: str = None):
 async def join(ctx):
   await try_delete_message(ctx)
   channel = ctx.author.voice.channel
-  
-  vc = await ensure_voice(ctx)
-    if vc is None:
-        return
+  vc = await channel.connect()
 
 @bot.command()
 async def innerjoin(ctx):
   channel = ctx.author.voice.channel
   vc = await channel.connect()
 
-def load_sounds():
-    sounds = {}
-    public_sounds = {}
-    secret_sounds = {}
+audio_files = {
+    "metalpipe": "sounds/pipe.mp3",
+    "augh": "sounds/augh.mp3",
+    "shootian": "sounds/shootian.mp3",
+    "picker": "sounds/picker.mp3",
+    "glendo": "sounds/glendo.mp3",
+    "freakyschlauch": "sounds/freakyschlauch.wav",
+    "freedom": "sounds/freedom.mp3",
+    "arab": "sounds/arab.mp3",
+    "hiccup": "sounds/hiccup.mp3",
+    "daddyasmr": "sounds/daddyasmr.mp3",
+    "boomboom": "sounds/boomboom.wav",
+    "fabio": "sounds/fabio.wav",
+    "djpiwo": "sounds/piwo.mp3",
+    "dc-join": "sounds/dc-join.mp3",
+    "dc-leave": "sounds/dc-leave.mp3",
+    "dc-call": "sounds/dc-call.mp3",
+    "dc-notif": "sounds/dc-notif.mp3",
+    "clock": "sounds/clock.mp3",
+    "wts": "sounds/wts.mp3",
+    "bleeze": "sounds/bleeze.mp3",
+    "plankton-moan": "sounds/plankton-moan.mp3",
+    "ohio": "sounds/ohio.mp3",
+    "skibidi": "sounds/skibidi.mp3",
+    "bjarne": "sounds/bjarne.mp3",
+    "wkda": "sounds/wkda.mp3",
+    "verboten": "sounds/verboten.mp3",
+    "rampal": "sounds/rampal.mp3",
+    "mortis": "sounds/mortis.mp3",
+    "sigmaboy": "sounds/sigmaboy.mp3",
+    "goodboy": "sounds/goodboy.mp3",
+    "fstudent": "sounds/fstudent.mp3",
+    "penguin": "sounds/penguin.mp3",
+    "barber": "sounds/barber.mp3",
+    "freakykrause": "sounds/freakykrause.mp3",
+    "eikelinks": "sounds/eikelinks.wav",
+    "eikegewalt": "sounds/eikegewalt.wav",
+    "freakyadrian": "sounds/freakyadrian.mp3",
+    "adrian1": "sounds/adrian1.mp3",
+    "adrian2": "sounds/adrian2.mp3",
+    "500": "sounds/500c.mp3",
+    "garmin": "sounds/garmin.mp3",
+    "wuff": "sounds/wuff.mp3"
+}
 
-    # Public-Sounds laden
-    if os.path.exists("sounds/public"):
-        for file in os.listdir("sounds/public"):
-            if file.endswith((".mp3", ".wav")):
-                name = os.path.splitext(file)[0]
-                path = os.path.join("sounds/public", file)
-                sounds[name] = path
-                public_sounds[name] = path
+hidden_files = {
+    "glorp": "sounds/sophie.wav",
+    "blorp": "sounds/hättehätte.wav",
+    "klorp": "sounds/klorp.mp3",
+    "vlorp": "sounds/vlorp.wav"
+}
 
-    # Secret-Sounds laden
-    if os.path.exists("sounds/secret"):
-        for file in os.listdir("sounds/secret"):
-            if file.endswith((".mp3", ".wav")):
-                name = os.path.splitext(file)[0]
-                path = os.path.join("sounds/secret", file)
-                sounds[name] = path
-                secret_sounds[name] = path
+class SoundButton(Button):
+    def __init__(self, label, file):
+        super().__init__(label=label, style=discord.ButtonStyle.primary)
+        self.file = file
 
-    return sounds, public_sounds, secret_sounds
+    async def callback(self, interaction: discord.Interaction):
+        """Wird ausgeführt, wenn der Button gedrückt wird"""
+        if interaction.user.voice is None:
+            await interaction.response.send_message("Du musst in einem Sprachkanal sein!", ephemeral=True)
+            return
 
-# beim Start laden
-all_sounds, public_sounds, secret_sounds = load_sounds()
+        if interaction.guild.voice_client is None:
+            await interaction.user.voice.channel.connect()
+
+        interaction.guild.voice_client.stop()
+        audio_source = discord.FFmpegPCMAudio(
+            executable="C:\\Users\\reala\\Desktop\\Colin\\coding\\FFmpeg\\bin\\ffmpeg.exe",
+            source=self.file
+        )
+
+        async def leave_channel():
+            if interaction.guild.voice_client is not None:
+                await interaction.guild.voice_client.disconnect()
+
+        interaction.guild.voice_client.play(audio_source, after=lambda e: bot.loop.create_task(leave_channel()))
+
+        # Nachricht löschen nach Button-Klick
+        await interaction.message.delete()
+
+        await interaction.response.send_message(f"Spiele **{self.label}** 🎵", ephemeral=True)
+
+# @bot.command()
+# async def sounds(ctx):
+#     """Sendet eine Nachricht mit Buttons, die sich selbst nach Klick löschen"""
+#     view = View()
+#     for label, file in audio_files.items():
+#         view.add_item(SoundButton(label, file))
+
+#     await ctx.send("Wähle einen Sound:", view=view)
 
 @bot.command()
 async def play(ctx, option="", stay="y"):
     await try_delete_message(ctx)
+    # Beide Dicts zusammenführen → alle Sounds sind spielbar
+    all_sounds = {**audio_files, **hidden_files}
+
+    # Nachricht des Users löschen (falls möglich)
+    # try:
+    #     await ctx.message.delete()
+    # except discord.Forbidden:
+    #     pass
+    # except discord.HTTPException:
+    #     pass
 
     if not option:
         await ctx.send("'?play <soundname>' oder '?sounds' für die sichtbare Liste")
         return
 
     if option not in all_sounds:
-        await ctx.send(f"Den Sound '{option}' gibt es nicht. Benutze '?sounds' für die sichtbare Liste.")
+        await ctx.send(f"Den Sound '{option}' gibt es nicht. Benutze '?sounds' für die sichtbaren Sounds.")
         return
 
     filepath = all_sounds[option]
@@ -211,16 +272,10 @@ async def leave(ctx):
 
 @bot.command()
 async def sounds(ctx):
-    await try_delete_message(ctx)
-    sound_list = "\n".join(f"- {name}" for name in sorted(public_sounds.keys()))
-    await ctx.send(f"**Verfügbare Sounds:**\n{sound_list}")
-
-@bot.command()
-async def reload_sounds(ctx):
-    await try_delete_message(ctx)
-    global all_sounds, public_sounds, secret_sounds
-    all_sounds, public_sounds, secret_sounds = load_sounds()
-    await ctx.send("🔄 Sounds neu geladen!")
+  await try_delete_message(ctx)
+  """Sendet eine Liste aller sichtbaren Sounds"""
+  sound_list = "\n".join(f"- {name}" for name in audio_files.keys())
+  await ctx.send(f"**Verfügbare Sounds:**\n{sound_list}")
 
 def run_discord_bot():
   load_dotenv()
