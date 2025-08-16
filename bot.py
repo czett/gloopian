@@ -6,7 +6,7 @@ import os, random, time, asyncio
 from discord.ui import Button, View
 import asyncio
 import tempfile, edge_tts
-import requests
+import requests, html
 from groq import Client
 from datetime import datetime
 
@@ -352,8 +352,67 @@ async def commands(ctx):
 async def meow(ctx):
     await try_delete_message(ctx)
     meows = ", ".join(["miau"] * random.randint(1, 10))
-
     await tts_play(ctx, meows)
+
+
+def fetch_trivia_question():
+    url = "https://opentdb.com/api.php?amount=1&type=multiple"
+    response = requests.get(url)
+    data = response.json()
+
+    if data["response_code"] != 0:
+        return None
+
+    question_data = data["results"][0]
+    question = html.unescape(question_data["question"])
+    correct_answer = html.unescape(question_data["correct_answer"])
+    options = [html.unescape(opt) for opt in question_data["incorrect_answers"]] + [correct_answer]
+    random.shuffle(options)
+
+    letters = ["A", "B", "C", "D"]
+    answer_mapping = dict(zip(letters, options))
+    correct_letter = [k for k, v in answer_mapping.items() if v == correct_answer][0]
+
+    return {
+        "question": question,
+        "category": question_data["category"],
+        "difficulty": question_data["difficulty"],
+        "options": answer_mapping,
+        "correct_letter": correct_letter,
+        "correct_answer": correct_answer
+    }
+
+@bot.command(name="trivia")
+async def trivia(ctx):
+    data = fetch_trivia_question()
+    if not data:
+        await ctx.send("Fehler beim Laden der Trivia-Frage. 😢")
+        return
+
+    # Frage formatieren
+    embed = discord.Embed(
+        title=f"Trivia Zeit! 🎮📚",
+        description=f"**Kategorie:** {data['category']}\n**Schwierigkeit:** {data['difficulty']}\n\n**{data['question']}**",
+        color=discord.Color.blue()
+    )
+    for letter, option in data["options"].items():
+        embed.add_field(name=letter, value=option, inline=False)
+
+    msg = await ctx.send(embed=embed)
+
+    # Check-Funktion für Antwort
+    def check(m):
+        return m.author == ctx.author and m.content.upper() in data["options"].keys()
+
+    try:
+        answer_msg = await bot.wait_for('message', check=check, timeout=30.0)
+        if answer_msg.content.upper() == data["correct_letter"]:
+            await ctx.send(f"✅ Richtig! Die Antwort war **{data['correct_answer']}**.")
+        else:
+            await ctx.send(f"❌ Falsch! Die richtige Antwort ist **{data['correct_answer']}**.")
+    except:
+        await ctx.send(f"⏰ Zeit abgelaufen! Die richtige Antwort war **{data['correct_answer']}**.")
+
 
 try:
     run_discord_bot()
